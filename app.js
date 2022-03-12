@@ -27,7 +27,7 @@ const userSchema = new mongoose.Schema({
     password: String
 });
 
-// extracts the sensitive information
+// extracts the sensitive informatio
 const secret = process.env.SECRET;
 
 userSchema.plugin(encrypt, {secret: secret, encryptedFields: ["password"]});
