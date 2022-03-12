@@ -1,6 +1,8 @@
 ////////////////////// Setup Section Start //////////////////////
 
-//jshint esversion:6
+// hids the sensitive information
+require("dotenv").config();
+
 const express = require("express");
 const ejs = require("ejs");
 const mongoose = require ("mongoose");
@@ -14,24 +16,25 @@ app.set("view engine", "ejs");
 app.use(express.urlencoded({extended: true}));
 app.use(express.static("public"));
 
-mongoose.connect("mongodb://localhost:27017/userDB");
+mongoose.connect(process.env.DB_URL);
 
 ////////////////////// Setup Section End //////////////////////
 
-////////////////////// Schema  Section Start //////////////////////
+////////////////////// Secure Schema Section Start //////////////////////
 
 const userSchema = new mongoose.Schema({
     email: String,
     password: String
 });
 
-const secret = "Thisisourlittlesecret."
+// extracts the sensitive information
+const secret = process.env.SECRET;
 
 userSchema.plugin(encrypt, {secret: secret, encryptedFields: ["password"]});
 
 const User = mongoose.model("User", userSchema);
 
-////////////////////// Schema Section End //////////////////////
+////////////////////// Secure Schema Section End //////////////////////
 
 ////////////////////// Get/Post Section Start //////////////////////
 
