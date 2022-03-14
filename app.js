@@ -1,58 +1,27 @@
-////////////////////// Setup Section Start //////////////////////
-
-// hids the sensitive information
-require("dotenv").config();
-
+//jshint esversion:6
+require('dotenv').config();
 const express = require("express");
+const bodyParser = require("body-parser");
 const ejs = require("ejs");
-const mongoose = require ("mongoose");
-const port = process.env.PORT || 3000;
-
-// Level 2 Encryption
-// const encrypt = require("mongoose-encryption");
-
-// Level 3 Encryption
-// const md5 = require("md5");
-
-// Level 4 Encryption
-// const bcrypt = require("bcrypt");
-// const { hash } = require("bcrypt");
-// const saltRounds = 10;
-
-// Level 5 Encryption
-// let session = require("express-session");
-// const passport = require("passport");
-// const passportLocalMongoose = require("passport-local-mongoose");
-
-// Level 6 Encryption
-let session = require("express-session");
+const mongoose = require("mongoose");
+const session = require('express-session');
 const passport = require("passport");
 const passportLocalMongoose = require("passport-local-mongoose");
-let GoogleStrategy = require('passport-google-oauth20').Strategy;
-const findOrCreate = require("mongoose-findorcreate");
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const findOrCreate = require('mongoose-findorcreate');
 
 const app = express();
 
-app.set("view engine", "ejs");
-
-app.use(express.urlencoded({extended: true}));
 app.use(express.static("public"));
+app.set('view engine', 'ejs');
+app.use(bodyParser.urlencoded({
+  extended: true
+}));
 
-// Level 5 Encryption
-// app.use(session({
-//     secret: process.env.SECRET,
-//     resave: false,
-//     saveUninitialized: false
-// }));
-
-// app.use(passport.initialize());
-// app.use(passport.session());
-
-// Level 6 Encryption
 app.use(session({
-    secret: process.env.SECRET,
-    resave: false,
-    saveUninitialized: false
+  secret: "Our little secret.",
+  resave: false,
+  saveUninitialized: false
 }));
 
 app.use(passport.initialize());
@@ -60,48 +29,28 @@ app.use(passport.session());
 
 mongoose.connect(process.env.DB_URL);
 
-////////////////////// Setup Section End //////////////////////
-
-////////////////////// Secure Schema Section Start //////////////////////
-
-const userSchema = new mongoose.Schema({
-    email: String,
-    password: String,
-    googleId: String
+const userSchema = new mongoose.Schema ({
+  email: String,
+  password: String,
+  googleId: String,
+  secret: String
 });
 
-// Level 5 Encryption
-// userSchema.plugin(passportLocalMongoose);
-
-// Level 6 Encryption
+userSchema.plugin(passportLocalMongoose);
 userSchema.plugin(findOrCreate);
 
-// Level 6 Encryption
-userSchema.plugin(passportLocalMongoose);
+const User = new mongoose.model("User", userSchema);
 
-// Level 1 Encryption
-// extracts the sensitive information
-// const secret = process.env.SECRET;
-
-// Level 2 Encryption
-// userSchema.plugin(encrypt, {secret: secret, encryptedFields: ["password"]});
-
-const User = mongoose.model("User", userSchema);
-
-// Level 5 Encryption
-// passport.use(User.createStrategy());
-// passport.serializeUser(User.serializeUser());
-// passport.deserializeUser(User.deserializeUser());
-
-// Level 6 Encryption
 passport.use(User.createStrategy());
+
 passport.serializeUser(function(user, done) {
-    done(null, user.id);
+  done(null, user.id);
 });
+
 passport.deserializeUser(function(id, done) {
-    User.findById(id, function(err, user) {
-        done(err, user);
-    });
+  User.findById(id, function(err, user) {
+    done(err, user);
+  });
 });
 
 passport.use(new GoogleStrategy({
@@ -111,159 +60,122 @@ passport.use(new GoogleStrategy({
     userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
   },
   function(accessToken, refreshToken, profile, cb) {
+    console.log(profile);
+
     User.findOrCreate({ googleId: profile.id }, function (err, user) {
       return cb(err, user);
     });
   }
 ));
 
-////////////////////// Secure Schema Section End //////////////////////
+app.get("/", function(req, res){
+  res.render("home");
+});
 
-////////////////////// Get Section Start //////////////////////
+app.get("/auth/google",
+  passport.authenticate('google', { scope: ["profile"] })
+);
 
-app.get("/", function (req, res) {
-    res.render("home");
-})
+app.get("/auth/google/secrets",
+  passport.authenticate('google', { failureRedirect: "/login" }),
+  function(req, res) {
+    // Successful authentication, redirect to secrets.
+    res.redirect("/secrets");
+  });
 
-app.get("/secrets", function (req, res) {
-    // Level 5 Encryption
-    // if(req.isAuthenticated()) {
-    //     res.render("secrets");
-    // } else {
-    //     res.redirect("/login")
-    // }
+app.get("/login", function(req, res){
+  res.render("login");
+});
 
-    // Level 6 Encryption
-    if(req.isAuthenticated()) {
-        res.render("secrets");
+app.get("/register", function(req, res){
+  res.render("register");
+});
+
+app.get("/secrets", function(req, res){
+  User.find({"secret": {$ne: null}}, function(err, foundUsers){
+    if (err){
+      console.log(err);
     } else {
-        res.redirect("/login")
+      if (foundUsers) {
+        res.render("secrets", {usersWithSecrets: foundUsers});
+      }
     }
-})
+  });
+});
 
-app.get("/login", function (req, res) {
-    res.render("login");
-})
+app.get("/submit", function(req, res){
+  if (req.isAuthenticated()){
+    res.render("submit");
+  } else {
+    res.redirect("/login");
+  }
+});
 
-app.get("/register", function (req, res) {
-    res.render("register");
-})
+app.post("/submit", function(req, res){
+  const submittedSecret = req.body.secret;
 
-app.get("/auth/google", 
-    passport.authenticate('google', {scope: ["profile"]}),
-);
+//Once the user is authenticated and their session gets saved, their user details are saved to req.user.
+  // console.log(req.user.id);
 
-// Level 6 Encryption
-app.get("/auth/google/secrets", 
-    passport.authenticate("google", {failureRedirect: "/login"}),
-        function(req, res) {
-            // Successful authentication, redirect secrets.
-            res.redirect("/secrets");
-        }
-);
+  User.findById(req.user.id, function(err, foundUser){
+    if (err) {
+      console.log(err);
+    } else {
+      if (foundUser) {
+        foundUser.secret = submittedSecret;
+        foundUser.save(function(){
+          res.redirect("/secrets");
+        });
+      }
+    }
+  });
+});
 
-////////////////////// Get Section End //////////////////////
+app.get("/logout", function(req, res){
+  req.logout();
+  res.redirect("/");
+});
 
-////////////////////// Post Section Start //////////////////////
+app.post("/register", function(req, res){
 
-app.post("/login", function(req, res) {
-    // const username = req.body.username;
+  User.register({username: req.body.username}, req.body.password, function(err, user){
+    if (err) {
+      console.log(err);
+      res.redirect("/register");
+    } else {
+      passport.authenticate("local")(req, res, function(){
+        res.redirect("/secrets");
+      });
+    }
+  });
 
-    // // Level 3 Encryption
-    // // const password = md5(req.body.password);
+});
 
-    // const password = req.body.password;
+app.post("/login", function(req, res){
 
-    // User.findOne({
-    //     email: username
-    // }, function(err, foundUser) {
-    //     if(!err) {
-    //         if(foundUser) {
-    //             // Level 4 Encryption
-    //             // bcrypt.compare(password, foundUser.password, function(error, result) {
-    //             //     if(result === true) {
-    //             //         res.render("secrets");
-    //             //     } else {
-    //             //         res.send("Wrong Password");
-    //             //     }
-    //             // })
-    //         }
-    //     } else {
-    //         console.log(err);
-    //     }
-    // })
+  const user = new User({
+    username: req.body.username,
+    password: req.body.password
+  });
 
-    // Level 5 Encryption
-    const user = new User({
-        username: req.body.username,
-        password: req.body.password
-    });
+  req.login(user, function(err){
+    if (err) {
+      console.log(err);
+    } else {
+      passport.authenticate("local")(req, res, function(){
+        res.redirect("/secrets");
+      });
+    }
+  });
 
-    req.login(user, function(err) {
-        if(err) {
-            console.log(err);
-        } else {
-            passport.authenticate("local")(req, res, function() {
-                res.redirect("/secrets");
-            })
-        }
-    })
-})
+});
 
-app.post("/register", function(req, res) {
-    // Level 4 Encryption
-    // bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
-    //     const newUser = new User({
-    //         email: req.body.username,
-    //         password: hash
-    //     });
 
-    //     newUser.save(function(err) {
-    //         if(err) {
-    //             console.log(err);
-    //         } else {
-    //             res.render("secrets");
-    //         }
-    //     })
-    // })
 
-    // Level 3 Encryption
-    // const newUser = new User({
-    //     email: req.body.username,
-    //     password: md5(req.body.password)
-    // });
 
-    // newUser.save(function(err) {
-    //     if(err) {
-    //         console.log(err);
-    //     } else {
-    //         res.render("secrets");
-    //     }
-    // })
 
-    // Level 5 Encryption
-    User.register(
-        {username: req.body.username},
-        req.body.password,
-        function(err, user) {
-            if(err) {
-                console.log(err);
-                res.redirect("/register");
-            } else {
-                passport.authenticate("local")(req, res, function() {
-                    res.redirect("/secrets");
-                })
-            }
-        }
-    )
-})
 
-////////////////////// Post Section End //////////////////////
 
-////////////////////// Main Function Start //////////////////////
-
-app.listen(port, () => {
-    console.log("Server started on port " + port);
-})
-
-////////////////////// Main Function End //////////////////////
+app.listen(3000, function() {
+  console.log("Server started on port 3000.");
+});
